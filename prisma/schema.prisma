@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum ProductStatus {
+  ACTIVE
+  DRAFT
+  ARCHIVED
+}
+
+enum BillingInterval {
+  ONE_TIME
+  MONTHLY
+  YEARLY
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(ADMIN)
+  workspace    String    @default("Orbit Workspace")
+  monthlyGoal  Float     @default(34000)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  products     Product[]
+}
+
+model Product {
+  id              String          @id @default(cuid())
+  name            String
+  slug            String          @unique
+  sku             String          @unique
+  description     String?
+  category        String          @default("SaaS Plan")
+  price           Float
+  currency        String          @default("BDT")
+  billingInterval BillingInterval @default(MONTHLY)
+  stock           Int             @default(999)
+  status          ProductStatus   @default(ACTIVE)
+  features        String[]        @default([])
+  createdById     String?
+  createdBy       User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  orderItems      OrderItem[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([status])
+  @@index([category])
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  phone       String
+  company     String?
+  address     String   @default("Dhaka")
+  city        String   @default("Dhaka")
+  country     String   @default("Bangladesh")
+  totalSpent  Float    @default(0)
+  ordersCount Int      @default(0)
+  status      String   @default("ACTIVE")
+  orders      Order[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Order {
+  id             String        @id @default(cuid())
+  orderNumber    String        @unique
+  tranId         String        @unique
+  customerId     String
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  subtotal       Float
+  tax            Float         @default(0)
+  totalAmount    Float
+  currency       String        @default("BDT")
+  status         OrderStatus   @default(PENDING)
+  paymentStatus  PaymentStatus @default(PENDING)
+  paymentMethod  String        @default("SSLCOMMERZ")
+  valId          String?
+  bankTranId     String?
+  cardType       String?
+  cardBrand      String?
+  gatewaySession String?
+  paidAt         DateTime?
+  notes          String?
+  items          OrderItem[]
+  paymentLogs    PaymentLog[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([tranId])
+  @@index([customerId])
+  @@index([paymentStatus])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName String
+  quantity    Int      @default(1)
+  unitPrice   Float
+  totalPrice  Float
+  createdAt   DateTime @default(now())
+}
+
+model PaymentLog {
+  id          String   @id @default(cuid())
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  tranId      String
+  eventType   String   // INIT | SUCCESS | FAIL | CANCEL | IPN | VALIDATION
+  status      String
+  amount      Float?
+  currency    String?
+  rawPayload  Json
+  createdAt   DateTime @default(now())
+
+  @@index([tranId])
+}
